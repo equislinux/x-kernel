@@ -1,0 +1,10 @@
+config.env
+work/
+out/
+repo/
+*.log
+*.pkg.tar.zst
+*.pkg.tar.zst.sig
+*.tar.gz
+__pycache__/
+*.pyc
