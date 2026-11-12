@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091,SC2153
-# Publish a built linux-x package set as the signed [x-kernel] SourceForge repo.
+# Publish a built package set as the signed variant SourceForge repo.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,22 +12,31 @@ usage() {
 Usage: publish.sh [options]
 
 Options:
-  --from DIR      Directory containing the built packages (default: out/)
+  --channel stable|testing|mainline
+                  Variant to publish (default: config CHANNEL)
+  --from DIR      Directory containing the built packages
+                  (default: out/<pkgbase>/<channel>/)
   --dry-run       Show the plan without creating/uploading anything
   --yes           Confirm publication; without it the script only reports
   -h, --help      This help
 
-Publication creates a signed [x-kernel] repo, uploads packages/DB/signatures to
-SourceForge, removes old package files and verifies the public bytes.
+Publication creates a signed [x-kernel] or [x-kernel-mainline] repo, uploads
+packages/DB/signatures to SourceForge, removes old package files and verifies
+the public bytes. Stable and mainline repositories are isolated.
 EOF
 }
 
-from="$OUTDIR"
+channel="$CHANNEL"
+from=""
 yes=0
 dry_run=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --channel) [[ $# -ge 2 ]] || die "--channel needs a value"; channel="$2"; shift 2 ;;
+        --stable) channel=stable; shift ;;
+        --testing) channel=testing; shift ;;
+        --mainline) channel=mainline; shift ;;
         --from) [[ $# -ge 2 ]] || die "--from needs a value"; from="$2"; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
         --yes) yes=1; shift ;;
@@ -36,6 +45,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+configure_variant "$channel"
+[[ "$channel" == testing ]] && die "testing is a local preview and is not published"
+from="${from:-$(build_outdir "$channel")}"
 from="$(expand_path "$from")"
 [[ -d "$from" ]] || die "package directory not found: $from"
 
@@ -54,7 +66,7 @@ done
 (( has_headers )) || die "$PKGBASE-headers package is missing"
 
 if (( dry_run )); then
-    log "dry-run: would build $REPO_NAME DB and upload to $SF_USER@frs.sourceforge.net:$SF_PATH/$SF_ARCH"
+    log "dry-run: would build $REPO_NAME DB from $from and upload to $SF_USER@frs.sourceforge.net:$SF_PATH/$SF_ARCH"
     printf '  %s\n' "${packages[@]}" >&2
     exit 0
 fi
@@ -99,12 +111,12 @@ done
 gpg --batch --export "$X_REPO_SIGN_KEY" > "$REPO_DIR/trustedkeys.gpg"
 gpg --batch --armor --export "$X_REPO_SIGN_KEY" > "$REPO_DIR/signing.pub"
 cat > "$REPO_DIR/README.md" <<EOF
-# X Linux [x-kernel]
+# X Linux [$REPO_NAME]
 
 Client configuration:
 
 \`\`\`ini
-[x-kernel]
+[$REPO_NAME]
 SigLevel = Required
 Server = $SF_BASE_URL
 \`\`\`
@@ -112,7 +124,7 @@ Server = $SF_BASE_URL
 Install with the Arch kernel kept as fallback:
 
 \`\`\`bash
-sudo xpm install --needed linux-x linux-x-headers
+sudo xpm install --needed $PKGBASE $PKGBASE-headers
 \`\`\`
 EOF
 
@@ -168,4 +180,4 @@ for file in "${local_files[@]}"; do
 done
 
 log "published $PKGBASE $tag"
-log "repo: [x-kernel] $SF_BASE_URL"
+log "repo: [$REPO_NAME] $SF_BASE_URL"

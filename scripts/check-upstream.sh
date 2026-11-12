@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091,SC2153
-# Compare the Arch kernel version with the last locally built linux-x tag.
+# Compare the selected upstream kernel version with the last local build.
+#
+# stable/testing track Arch's packaged kernel; mainline tracks the AUR
+# linux-mainline recipe (which follows kernel.org mainline).
 #
 # Exit codes:
 #   0  current
@@ -17,8 +20,9 @@ usage() {
 Usage: check-upstream.sh [options]
 
 Options:
-  --channel stable|testing  Arch channel to query (default: config CHANNEL)
-  --print-version           Print only the selected Arch tag and exit
+  --channel stable|testing|mainline
+                            Upstream channel (default: config CHANNEL)
+  --print-version           Print only the selected tag and exit
   --json                    Machine-readable output
   --quiet                   Only the exit code
   -h, --help                This help
@@ -37,6 +41,7 @@ while [[ $# -gt 0 ]]; do
         --channel) [[ $# -ge 2 ]] || die "--channel needs a value"; channel="$2"; shift 2 ;;
         --stable) channel=stable; shift ;;
         --testing) channel=testing; shift ;;
+        --mainline) channel=mainline; shift ;;
         --print-version) print_version=1; shift ;;
         --json) json=1; shift ;;
         --quiet) quiet=1; shift ;;
@@ -46,8 +51,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 require_tools curl jq
-selected="$(arch_version "$channel")"
-current="$(last_built_tag)"
+configure_variant "$channel"
+if [[ "$channel" == mainline ]]; then
+    selected="$(aur_mainline_version)"
+else
+    selected="$(arch_version "$channel")"
+fi
+current="$(last_built_tag "$channel")"
 
 if (( print_version )); then
     printf '%s\n' "$selected"
@@ -57,10 +67,11 @@ fi
 if (( json )); then
     jq -n \
         --arg channel "$channel" \
+        --arg pkgbase "$PKGBASE" \
         --arg selected "$selected" \
-        --arg current "$current" \
+        --arg current "${current:-none}" \
         --arg status "$([[ "$selected" == "$current" ]] && echo current || echo update)" \
-        '{channel:$channel,selected:$selected,current:$current,status:$status}'
+        '{channel:$channel,pkgbase:$pkgbase,selected:$selected,current:$current,status:$status}'
 else
     (( quiet )) || printf 'channel:  %s\nselected: %s\ncurrent:  %s\n' \
         "$channel" "$selected" "${current:-none}"

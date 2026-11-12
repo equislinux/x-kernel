@@ -12,8 +12,9 @@ usage() {
 Usage: release.sh [options]
 
 Options:
-  --channel stable|testing  Arch channel (default: config CHANNEL)
-  --tag TAG                 Exact Arch packaging tag
+  --channel stable|testing|mainline
+                            Upstream channel (default: config CHANNEL)
+  --tag TAG                 Exact upstream packaging tag
   --force                   Rebuild even if the selected tag is already built
   --publish                 Publish after a successful build
   --yes                     Confirm publication (required with --publish)
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
         --channel) [[ $# -ge 2 ]] || die "--channel needs a value"; channel="$2"; shift 2 ;;
         --stable) channel=stable; shift ;;
         --testing) channel=testing; shift ;;
+        --mainline) channel=mainline; shift ;;
         --tag) [[ $# -ge 2 ]] || die "--tag needs a value"; tag="$2"; shift 2 ;;
         --force) force=1; shift ;;
         --publish) publish=1; shift ;;
@@ -46,8 +48,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+configure_variant "$channel"
+if (( publish )) && [[ "$channel" == testing ]]; then
+    die "testing is a local preview; do not publish it"
+fi
 selected="${tag:-$("$SCRIPT_DIR/check-upstream.sh" --channel "$channel" --print-version)}"
-current="$(last_built_tag)"
+current="$(last_built_tag "$channel")"
 
 log "channel:  $channel"
 log "selected: $selected"
@@ -64,7 +70,7 @@ if (( dry_run )); then
 fi
 
 recipe="$("$SCRIPT_DIR/prepare-recipe.sh" --channel "$channel" --tag "$selected" | tail -n1)"
-build_args=(--recipe-dir "$recipe")
+build_args=(--channel "$channel" --recipe-dir "$recipe")
 (( publish )) && build_args+=(--publish)
 (( yes )) && build_args+=(--yes)
 "$SCRIPT_DIR/build.sh" "${build_args[@]}"

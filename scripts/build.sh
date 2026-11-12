@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091,SC2153
-# Build linux-x in a clean chroot, sign the packages and run static checks.
+# Build linux-x or linux-x-mainline in a clean chroot, sign the packages and
+# run static checks.
 #
 # The script runs as the normal user. Only mkarchroot/makechrootpkg are invoked
 # through sudo. Signing and publication use the caller's keyring and SSH key.
@@ -15,8 +16,9 @@ usage() {
 Usage: build.sh [options]
 
 Options:
-  --channel stable|testing  Arch channel (default: config CHANNEL)
-  --tag TAG                 Exact Arch packaging tag
+  --channel stable|testing|mainline
+                            Upstream channel (default: config CHANNEL)
+  --tag TAG                 Exact upstream packaging tag
   --recipe-dir DIR          Reuse an already prepared recipe
   --no-clean                Do not recreate the chroot working copy
   --no-sign                 Build without signing (testing only)
@@ -26,8 +28,9 @@ Options:
   -h, --help                This help
 
 Builds are performed with makechrootpkg against
-/var/lib/archbuild/x-kernel-<arch>. Arch's linux remains installed; linux-x is
-never installed or activated by this script.
+/var/lib/archbuild/x-kernel-<arch>. Arch's linux remains installed; the X
+kernel package is never installed or activated by this script. Output is kept
+under out/<pkgbase>/<channel>/.
 EOF
 }
 
@@ -45,6 +48,7 @@ while [[ $# -gt 0 ]]; do
         --channel) [[ $# -ge 2 ]] || die "--channel needs a value"; channel="$2"; shift 2 ;;
         --stable) channel=stable; shift ;;
         --testing) channel=testing; shift ;;
+        --mainline) channel=mainline; shift ;;
         --tag) [[ $# -ge 2 ]] || die "--tag needs a value"; tag="$2"; shift 2 ;;
         --recipe-dir) [[ $# -ge 2 ]] || die "--recipe-dir needs a value"; recipe="$2"; shift 2 ;;
         --no-clean) clean=0; shift ;;
@@ -57,6 +61,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+configure_variant "$channel"
+if (( publish )) && [[ "$channel" == testing ]]; then
+    die "testing is a local preview; build without --publish"
+fi
+
 run_privileged() {
     if [[ "$(id -u)" -eq 0 ]]; then
         "$@"
@@ -65,9 +74,11 @@ run_privileged() {
     fi
 }
 
+outdir="$(build_outdir "$channel")"
 if (( dry_run )); then
-    recipe="${recipe:-$WORKDIR/recipe-${tag:-<selected>}}"
-    log "dry-run: channel=$channel tag=${tag:-selected-by-check} recipe=$recipe"
+    recipe="${recipe:-$WORKDIR/recipe-$channel-${tag:-<selected>}}"
+    log "dry-run: channel=$channel pkgbase=$PKGBASE tag=${tag:-selected-by-check}"
+    log "dry-run: recipe=$recipe out=$outdir"
     log "dry-run: chroot=$CHROOT clean=$clean sign=$sign publish=$publish"
     log "dry-run: would run mkarchroot (if missing) and makechrootpkg"
     exit 0
@@ -94,15 +105,16 @@ if [[ ! -d "$chroot_root" ]]; then
     run_privileged mkarchroot -C /etc/pacman.conf -M /etc/makepkg.conf "$chroot_root" base-devel
 fi
 
-mkdir -p "$OUTDIR" "$SRCDEST" "$LOGDEST"
-# Keep the output directory limited to the current build. Published artifacts
-# remain in the repo/SourceForge and are not affected by this cleanup.
-find "$OUTDIR" -maxdepth 1 -type f \
+LOGDEST="$outdir/logs"
+mkdir -p "$outdir" "$SRCDEST" "$LOGDEST"
+# Keep the output directory limited to the current variant build. Published
+# artifacts remain in the repo/SourceForge and are not affected by this cleanup.
+find "$outdir" -maxdepth 1 -type f \
     \( -name "$PKGBASE-*.pkg.tar.zst" -o -name "$PKGBASE-*.pkg.tar.zst.sig" \) \
     -delete
-log "building $PKGBASE from Arch $tag"
+log "building $PKGBASE from $channel $tag"
 log "chroot: $CHROOT"
-log "output: $OUTDIR"
+log "output: $outdir"
 
 chroot_args=(-r "$CHROOT")
 (( clean )) && chroot_args+=(-c)
@@ -111,14 +123,14 @@ chroot_args+=(-- --nocheck)
 (
     cd "$recipe"
     run_privileged env \
-        PKGDEST="$OUTDIR" \
+        PKGDEST="$outdir" \
         SRCDEST="$SRCDEST" \
         LOGDEST="$LOGDEST" \
         makechrootpkg "${chroot_args[@]}"
 )
 
 mapfile -t packages < <(
-    find "$OUTDIR" -maxdepth 1 -type f -name "$PKGBASE-*.pkg.tar.zst" -printf '%f\n' 2>/dev/null | sort
+    find "$outdir" -maxdepth 1 -type f -name "$PKGBASE-*.pkg.tar.zst" -printf '%f\n' 2>/dev/null | sort
 )
 (( ${#packages[@]} > 0 )) || die "makechrootpkg produced no $PKGBASE packages"
 
@@ -134,17 +146,17 @@ done
 for pkg in "${packages[@]}"; do
     if (( sign )); then
         load_signing_key
-        sign_file "$OUTDIR/$pkg"
+        sign_file "$outdir/$pkg"
     fi
-    "$SCRIPT_DIR/verify-package.sh" "$OUTDIR/$pkg"
+    "$SCRIPT_DIR/verify-package.sh" --channel "$channel" "$outdir/$pkg"
 done
 
-printf '%s\n' "$tag" > "$OUTDIR/version"
+printf '%s\n' "$tag" > "$outdir/version"
 mapfile -t pkg_json < <(
     for pkg in "${packages[@]}"; do
         jq -n \
             --arg name "$pkg" \
-            --arg sha256 "$(sha256_file "$OUTDIR/$pkg")" \
+            --arg sha256 "$(sha256_file "$outdir/$pkg")" \
             '{name:$name,sha256:$sha256}'
     done
 )
@@ -154,7 +166,7 @@ printf '%s\n' "${pkg_json[@]}" | jq -s \
     --arg arch "$ARCH" \
     --arg built_at "$(utc_now)" \
     '{tag:$tag,arch:$arch,recipe:$recipe,built_at:$built_at,packages:.}' \
-    > "$OUTDIR/build.json"
+    > "$outdir/build.json"
 
 chown_outputs
 log "build OK: $tag"
@@ -165,5 +177,5 @@ if (( publish )); then
         log "publication requested but not confirmed; rerun with --publish --yes"
         exit 0
     fi
-    "$SCRIPT_DIR/publish.sh" --yes --from "$OUTDIR"
+    "$SCRIPT_DIR/publish.sh" --yes --channel "$channel" --from "$outdir"
 fi

@@ -16,21 +16,25 @@ if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
 fi
 
-: "${PKGBASE:=linux-x}"
 : "${ARCH:=x86_64}"
 : "${CHANNEL:=stable}"
 : "${UPSTREAM_REPO:=https://gitlab.archlinux.org/archlinux/packaging/packages/linux.git}"
+: "${AUR_MAINLINE_REPO:=https://aur.archlinux.org/linux-mainline.git}"
 : "${CHROOT:=/var/lib/archbuild/x-kernel-$ARCH}"
 : "${WORKDIR:=$ROOT/work}"
 : "${OUTDIR:=$ROOT/out}"
 : "${REPODIR:=$ROOT/repo}"
-: "${REPO_NAME:=x-kernel}"
 : "${KEYS_ENV:=$ROOT/../keys/env.sh}"
 : "${SF_USER:=xscriptor}"
 : "${SF_KEY:=$HOME/.ssh/id_ed25519_sourceforge}"
-: "${SF_PATH:=/home/frs/project/equislinux/kernel}"
 : "${SF_ARCH:=$ARCH}"
-: "${SF_BASE_URL:=https://downloads.sourceforge.net/project/equislinux/kernel/$SF_ARCH}"
+
+# Remember whether the config explicitly supplied variant-dependent values.
+# This lets configure_variant change them later without clobbering overrides.
+XK_PKGBASE_EXPLICIT="${PKGBASE+1}"
+XK_REPO_NAME_EXPLICIT="${REPO_NAME+1}"
+XK_SF_PATH_EXPLICIT="${SF_PATH+1}"
+XK_SF_BASE_URL_EXPLICIT="${SF_BASE_URL+1}"
 
 # Expand a leading ~ and resolve relative repo paths.
 expand_path() {
@@ -51,11 +55,53 @@ KEYS_ENV="$(expand_path "$KEYS_ENV")"
 SF_KEY="$(expand_path "$SF_KEY")"
 SRCDEST="$(expand_path "${SRCDEST:-$WORKDIR/sources}")"
 LOGDEST="$(expand_path "${LOGDEST:-$OUTDIR/logs}")"
-REPO_DIR="$REPODIR/$SF_ARCH"
 
 log() { printf '[x-kernel] %s\n' "$*" >&2; }
 warn() { printf '[x-kernel] warning: %s\n' "$*" >&2; }
 die() { printf '[x-kernel] error: %s\n' "$*" >&2; exit 2; }
+
+# stable/testing share the linux-x package and the [x-kernel] repo. mainline is
+# a separate package family and repo so neither can delete the other's files.
+variant_defaults() {
+    local channel="${1:-$CHANNEL}"
+    local default_pkgbase default_repo default_sf_path
+
+    case "$channel" in
+        stable|testing)
+            default_pkgbase=linux-x
+            default_repo=x-kernel
+            default_sf_path=/home/frs/project/equislinux/kernel
+            ;;
+        mainline)
+            default_pkgbase=linux-x-mainline
+            default_repo=x-kernel-mainline
+            default_sf_path=/home/frs/project/equislinux/kernel-mainline
+            ;;
+        *)
+            die "unknown channel '$channel' (expected stable, testing or mainline)"
+            ;;
+    esac
+
+    [[ -n "$XK_PKGBASE_EXPLICIT" ]] || PKGBASE="$default_pkgbase"
+    [[ -n "$XK_REPO_NAME_EXPLICIT" ]] || REPO_NAME="$default_repo"
+    [[ -n "$XK_SF_PATH_EXPLICIT" ]] || SF_PATH="$default_sf_path"
+    if [[ -z "$XK_SF_BASE_URL_EXPLICIT" ]]; then
+        SF_BASE_URL="https://downloads.sourceforge.net/project/equislinux/$(basename "$SF_PATH")/$SF_ARCH"
+    fi
+}
+
+configure_variant() {
+    local channel="${1:-$CHANNEL}"
+    variant_defaults "$channel"
+    REPO_DIR="$REPODIR/$SF_ARCH"
+}
+
+# Build artifacts are kept per package family and channel so a testing or
+# mainline build cannot overwrite the stable linux-x output.
+build_outdir() {
+    local channel="${1:-$CHANNEL}"
+    printf '%s/%s/%s\n' "$OUTDIR" "$PKGBASE" "$channel"
+}
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
@@ -71,7 +117,7 @@ arch_json_url() {
     case "$channel" in
         stable)  printf 'https://archlinux.org/packages/core/x86_64/linux/json/\n' ;;
         testing) printf 'https://archlinux.org/packages/core-testing/x86_64/linux/json/\n' ;;
-        *) die "unknown channel '$channel' (expected stable or testing)" ;;
+        *) die "unknown Arch channel '$channel' (expected stable or testing)" ;;
     esac
 }
 
@@ -84,16 +130,27 @@ arch_version() {
         "$(jq -r '.pkgrel' <<<"$json")"
 }
 
+aur_mainline_version() {
+    local url='https://aur.archlinux.org/rpc/v5/info?arg[]=linux-mainline' json version
+    json="$(curl -gfsSL --max-time 30 "$url")" || die "could not query AUR linux-mainline"
+    version="$(jq -r '.results[0].Version // empty' <<<"$json")"
+    [[ -n "$version" ]] || die "AUR linux-mainline returned no version"
+    printf '%s\n' "$version"
+}
+
 last_built_tag() {
-    local file tag
-    if [[ -f "$OUTDIR/version" ]]; then
-        tr -d ' \n\r\t' < "$OUTDIR/version"
+    local channel="${1:-$CHANNEL}" dir file tag
+    dir="$(build_outdir "$channel")"
+    if [[ -f "$dir/version" ]]; then
+        tr -d ' \n\r\t' < "$dir/version"
         return 0
     fi
-    if [[ -d "$OUTDIR" ]]; then
-        file="$(find "$OUTDIR" -maxdepth 1 -type f -name "$PKGBASE-*.pkg.tar.zst" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
+    if [[ -d "$dir" ]]; then
+        file="$(find "$dir" -maxdepth 1 -type f -name "$PKGBASE-*.pkg.tar.zst" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
     fi
-    if [[ -z "${file:-}" && -d "$REPO_DIR" ]]; then
+    # Testing is a preview channel; do not use the published stable repo as its
+    # current build marker.
+    if [[ -z "${file:-}" && "$channel" != "testing" && -d "$REPO_DIR" ]]; then
         file="$(find "$REPO_DIR" -maxdepth 1 -type f -name "$PKGBASE-*.pkg.tar.zst" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
     fi
     [[ -n "${file:-}" ]] || return 0
@@ -170,3 +227,5 @@ sf_ensure_key() {
 require_root() {
     [[ "$(id -u)" -eq 0 ]] || die "this step needs root; run it with sudo"
 }
+
+configure_variant "$CHANNEL"

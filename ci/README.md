@@ -1,22 +1,15 @@
-# CI setup (prepared)
+# CI setup (watcher only)
 
-The example workflow is **not active** because this repository has no remote
-yet. It targets a self-hosted runner with these labels:
+The active workflow is `.github/workflows/kernel-watch.yml`. It runs on a
+GitHub-hosted runner with only `git`, `curl` and `jq`.
 
-```text
-self-hosted, linux, x64, x-kernel
-```
+It checks the three channels and writes a Markdown table to the workflow step
+summary:
 
-The runner needs:
+- `stable` — Arch `core/linux` (currently 7.2.15.arch1-1);
+- `testing` — Arch `core-testing/linux` (currently 7.3.4.arch1-1);
+- `mainline` — AUR `linux-mainline` (currently 7.4rc1-1).
 
-- `devtools` (`makechrootpkg`, `mkarchroot`), `git`, `gpg`, `rsync`, `sftp`,
-  `curl`, `jq`, `python3`, `bsdtar`;
-- sudo access for `mkarchroot`/`makechrootpkg` (NOPASSWD if the runner is
-  non-interactive);
-- `keys/env.sh` and the SourceForge SSH key, kept only on the runner;
-- a local `config.env` (gitignored) with the SourceForge paths, or the
-  defaults from `config.env.example`.
-
-The `publish` job uses a protected GitHub environment
-(`kernel-release`) with required reviewers. The scheduled job only builds and
-signs; it never publishes. Signing keys are not stored in GitHub.
+It never builds, signs, publishes or touches SourceForge. Monthly builds and
+publication are manual; signing keys, `keys/env.sh`, `config.env` and the
+SourceForge SSH key never enter CI.

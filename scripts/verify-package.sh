@@ -9,15 +9,29 @@ source "$SCRIPT_DIR/common.sh"
 
 usage() {
     cat <<'EOF'
-Usage: verify-package.sh PACKAGE...
+Usage: verify-package.sh [--channel stable|testing|mainline] PACKAGE...
 
 Checks names, signatures, kernel release suffix, vmlinuz/pkgbase and headers.
 EOF
 }
 
-if [[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+channel="$CHANNEL"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --channel) [[ $# -ge 2 ]] || die "--channel needs a value"; channel="$2"; shift 2 ;;
+        --stable) channel=stable; shift ;;
+        --testing) channel=testing; shift ;;
+        --mainline) channel=mainline; shift ;;
+        --) shift; break ;;
+        -h|--help) usage; exit 0 ;;
+        -*) die "unknown option: $1" ;;
+        *) break ;;
+    esac
+done
+configure_variant "$channel"
+
+if [[ $# -eq 0 ]]; then
     usage
-    [[ $# -gt 0 ]] && exit 0
     exit 2
 fi
 
@@ -69,7 +83,10 @@ for package in "$@"; do
     if [[ "$pkgname" == "$PKGBASE" ]]; then
         krel="$(sed -n 's#^usr/lib/modules/\([^/]*\)/.*#\1#p' <<<"$listing" | sort -u | head -1)"
         [[ -n "$krel" ]] || { warn "no kernel module directory in $pkgname"; fail=1; continue; }
-        [[ "$krel" == *-x ]] || { warn "kernel release does not end in -x: $krel"; fail=1; }
+        expected_suffix="-x"
+        [[ "$channel" == mainline ]] && expected_suffix="-x-mainline"
+        [[ "$krel" == *"$expected_suffix" ]] \
+            || { warn "kernel release does not end in $expected_suffix: $krel"; fail=1; }
         grep -qx "usr/lib/modules/$krel/vmlinuz" <<<"$listing" \
             || { warn "missing vmlinuz in $pkgname ($krel)"; fail=1; }
         installed_base="$(bsdtar -xOf "$package" "usr/lib/modules/$krel/pkgbase" 2>/dev/null || true)"

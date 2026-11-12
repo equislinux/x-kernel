@@ -1,0 +1,33 @@
+# Watcher only: reports upstream kernel versions. It never builds, signs or
+# publishes, and has no access to signing keys or SourceForge.
+name: x-kernel-watch
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
+      - name: Check upstream versions
+        run: |
+          set -o pipefail
+          ./scripts/watch-upstream.sh | tee watch.md
+
+      - name: Add summary
+        if: always()
+        run: |
+          if [ -s watch.md ]; then
+            cat watch.md >> "$GITHUB_STEP_SUMMARY"
+          fi
