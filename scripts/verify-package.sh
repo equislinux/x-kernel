@@ -22,6 +22,12 @@ if [[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 require_tools bsdtar
+# Public verification uses the same isolated keyring as signing. This only
+# loads the keyring path; it does not print or copy secret material.
+if [[ -f "$KEYS_ENV" ]]; then
+    # shellcheck source=/dev/null
+    source "$KEYS_ENV"
+fi
 fail=0
 
 for package in "$@"; do
