@@ -61,7 +61,7 @@ run_privileged() {
     if [[ "$(id -u)" -eq 0 ]]; then
         "$@"
     else
-        sudo -E -- "$@"
+        sudo -- "$@"
     fi
 }
 
