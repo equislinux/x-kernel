@@ -5,9 +5,11 @@ recipe** for the stable/testing channels, and `linux-x-mainline` builds from
 the AUR `linux-mainline` recipe for the mainline channel. Neither is a fork of
 the Linux source tree.
 
-Status: **prepared, not active.** No GitHub/SourceForge remote is configured
-here, nothing has been published, and no other X repository is touched by these
-scripts. Arch's `linux`/`linux-lts`/`linux-zen` remain the supported kernels.
+Status: **prepared, not active.** The source repo is public at
+<https://github.com/equislinux/x-kernel> and the watcher workflow is active,
+but neither binary repo has been published and no other X repository is touched
+by these scripts. Arch's `linux`/`linux-lts`/`linux-zen` remain the supported
+kernels.
 
 ## Channels
 
@@ -37,6 +39,7 @@ line; the AUR recipe currently says 7.4rc1, not rc2.
   100 MB/file limit. Stable and mainline have separate repos and directories.
 - CI is only a watcher (`.github/workflows/kernel-watch.yml`). **Builds and
   publication are manual.**
+- Repo: <https://github.com/equislinux/x-kernel>.
 
 ## Layout
 
