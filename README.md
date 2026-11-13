@@ -7,10 +7,11 @@ the Linux source tree.
 
 Status: **prepared, not active.** The source repo is public at
 <https://github.com/equislinux/x-kernel> and the watcher workflow is active.
-Signed packages were built locally for stable 7.3.4 and mainline 7.4rc1, but
-neither binary repo has been published and no boot test has run yet. No other X
-repository is touched by these scripts. Arch's `linux`/`linux-lts`/`linux-zen`
-remain the supported kernels.
+Signed packages were built locally for stable 7.3.4 and mainline 7.4rc1. Both
+kernel images booted to userspace in a minimal QEMU initramfs smoke test, but
+neither binary repo has been published and full installed-system/DKMS testing
+is pending. No other X repository is touched by these scripts. Arch's
+`linux`/`linux-lts`/`linux-zen` remain the supported kernels.
 
 ## Channels
 
