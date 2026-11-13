@@ -5,13 +5,13 @@ recipe** for the stable/testing channels, and `linux-x-mainline` builds from
 the AUR `linux-mainline` recipe for the mainline channel. Neither is a fork of
 the Linux source tree.
 
-Status: **prepared, not active.** The source repo is public at
-<https://github.com/equislinux/x-kernel> and the watcher workflow is active.
-Signed packages were built locally for stable 7.3.4 and mainline 7.4rc1. Both
-kernel images booted to userspace in a minimal QEMU initramfs smoke test, but
-neither binary repo has been published and full installed-system/DKMS testing
-is pending. No other X repository is touched by these scripts. Arch's
-`linux`/`linux-lts`/`linux-zen` remain the supported kernels.
+Status: **published as source and binaries; not default.** The source repo is
+public at <https://github.com/equislinux/x-kernel> with an active watcher.
+Stable 7.3.4 and mainline 7.4rc1 packages were built, signed and uploaded to
+SourceForge with public-byte verification. Both kernel images booted to
+userspace in QEMU, and the new ISO installer passes interactive installs for
+all Arch kernels plus the two X kernels across KDE, Niri and Hyprland. Arch's
+`linux`/`linux-lts`/`linux-zen` remain the default supported kernels.
 
 ## Channels
 
@@ -106,6 +106,15 @@ layout changed and needs review. Then rebuild and publish manually:
 
 Monthly manual cadence is enough. The GitHub Actions watcher only checks the
 three upstream versions and writes a step summary.
+
+## Known SourceForge pacman caveat
+
+The SourceForge binary repos are published, but a direct `pacman -Sy` against
+`downloads.sourceforge.net` currently hits a SourceForge redirect bug: pacman
+builds the `.db.sig` URL by appending `.sig` to the redirected query string.
+The X ISO avoids this by bundling the signed kernel packages and installing
+them with `pacman -U`. The client stanzas below are the intended online
+configuration once the DB is mirrored on a non-redirecting host.
 
 ## SourceForge setup (first time)
 

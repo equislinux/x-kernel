@@ -145,8 +145,12 @@ printf 'mkdir %s/%s\n' "$SF_PATH" "$SF_ARCH" | sftp_remote >/dev/null 2>&1 || tr
 
 log "uploading to SourceForge (${#packages[@]} package(s))"
 RSH=(ssh -i "$SF_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
-rsync -e "${RSH[*]}" -h --partial "$REPO_DIR/" \
-    "$SF_USER@frs.sourceforge.net:$SF_PATH/$SF_ARCH/"
+(
+    # IFS is newline by default in common.sh; rsync needs space-separated -e.
+    IFS=' '
+    rsync -a -e "${RSH[*]}" -h --partial "$REPO_DIR/" \
+        "$SF_USER@frs.sourceforge.net:$SF_PATH/$SF_ARCH/"
+)
 
 log "removing old remote package versions"
 mapfile -t local_files < <(find "$REPO_DIR" -maxdepth 1 -type f -printf '%f\n' | sort)

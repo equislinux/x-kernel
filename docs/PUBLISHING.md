@@ -59,8 +59,18 @@ Server = https://downloads.sourceforge.net/project/equislinux/kernel-mainline/x8
 ```
 
 The SourceForge direct URL pattern was verified with the existing ISO files
-(302 to a mirror). If FRS redirects ever stop working as a pacman repo, keep
-SourceForge as the package mirror and move only the small DB to another host.
+(302 to a mirror). A direct pacman sync currently fails because pacman appends
+`.sig` to the redirected URL query string (`GPGME error: No data` /
+`missing required signature`). The ISO installer bundles the signed packages
+and uses `pacman -U`; the online client stanzas above are the intended
+configuration once the small DB is mirrored on a non-redirecting host.
+
+Published on 2026-11-13:
+
+- stable `linux-x 7.3.4.arch1-1` and mainline `linux-x-mainline 7.4rc1-1`;
+- packages, headers, docs, signatures, DB/files, `SHA256SUMS` and public key;
+- publish verification retried SourceForge downloads until the public bytes
+  matched.
 
 ## Safety
 
