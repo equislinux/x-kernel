@@ -6,23 +6,24 @@ the AUR `linux-mainline` recipe for the mainline channel. Neither is a fork of
 the Linux source tree.
 
 Status: **prepared, not active.** The source repo is public at
-<https://github.com/equislinux/x-kernel> and the watcher workflow is active,
-but neither binary repo has been published and no other X repository is touched
-by these scripts. Arch's `linux`/`linux-lts`/`linux-zen` remain the supported
-kernels.
+<https://github.com/equislinux/x-kernel> and the watcher workflow is active.
+Signed packages were built locally for stable 7.3.4 and mainline 7.4rc1, but
+neither binary repo has been published and no boot test has run yet. No other X
+repository is touched by these scripts. Arch's `linux`/`linux-lts`/`linux-zen`
+remain the supported kernels.
 
 ## Channels
 
 | channel | upstream | X package | repo | current upstream |
 |---|---|---|---|---|
-| `stable` | Arch `core/linux` | `linux-x` | `[x-kernel]` | 7.2.15.arch1-1 |
-| `testing` | Arch `core-testing/linux` | `linux-x` | not published | 7.3.4.arch1-1 |
+| `stable` | Arch `core/linux` | `linux-x` | `[x-kernel]` | 7.3.4.arch1-1 |
+| `testing` | Arch `core-testing/linux` | `linux-x` | not published | 7.3.4.arch1-2 |
 | `mainline` | AUR `linux-mainline` | `linux-x-mainline` | `[x-kernel-mainline]` | 7.4rc1-1 |
 
-`stable` follows whatever Arch ships as stable. Arch stable is still 7.2.x, so
-X stable is 7.2.x today; when Arch promotes 7.3.4 the same command produces
-7.3.x. `testing` is a local preview of that promotion. `mainline` is the 7.4
-line; the AUR recipe currently says 7.4rc1, not rc2.
+`stable` follows whatever Arch ships as stable. Arch promoted 7.3.4 during this
+work, so the current X stable build is 7.3.4; the same command will follow the
+next Arch stable bump. `testing` is a local preview (currently 7.3.4.arch1-2).
+`mainline` is the 7.4 line; the AUR recipe currently says 7.4rc1, not rc2.
 
 ## What it does
 

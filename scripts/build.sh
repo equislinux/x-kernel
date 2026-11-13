@@ -102,11 +102,21 @@ tag="$(jq -r '.tag // empty' "$recipe/.x-kernel-source.json" 2>/dev/null || true
 chroot_root="$CHROOT/root"
 if [[ ! -d "$chroot_root" ]]; then
     log "creating clean chroot $chroot_root (first run only)"
+    # mkarchroot uses readlink -f on the full working dir; its parent must
+    # already exist or it reports "Please specify a working directory".
+    run_privileged mkdir -p "$(dirname "$chroot_root")"
     run_privileged mkarchroot -C /etc/pacman.conf -M /etc/makepkg.conf "$chroot_root" base-devel
 fi
 
 LOGDEST="$outdir/logs"
 mkdir -p "$outdir" "$SRCDEST" "$LOGDEST"
+# When this script is invoked through sudo (the NOPASSWD rule), makechrootpkg
+# runs makepkg as SUDO_USER. The recipe and bind-mounted directories must be
+# writable by that user, not only by root.
+if [[ "$(id -u)" -eq 0 && -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]]; then
+    chown "$SUDO_UID:$SUDO_GID" "$WORKDIR" 2>/dev/null || true
+    chown -R "$SUDO_UID:$SUDO_GID" "$recipe" "$outdir" "$SRCDEST" 2>/dev/null || true
+fi
 # Keep the output directory limited to the current variant build. Published
 # artifacts remain in the repo/SourceForge and are not affected by this cleanup.
 find "$outdir" -maxdepth 1 -type f \
@@ -116,9 +126,36 @@ log "building $PKGBASE from $channel $tag"
 log "chroot: $CHROOT"
 log "output: $outdir"
 
+# makepkg verifies the kernel tarball signature with the signing user's GPG
+# keyring. Build a disposable keyring from Arch's public keyring plus the
+# kernel.org key that signs the tarballs, then pass it only to makechrootpkg.
+makepkg_gnupg="$WORKDIR/gnupg-source"
+if [[ ! -f "$makepkg_gnupg/.x-kernel-ready" ]]; then
+    log "preparing source-verification keyring: $makepkg_gnupg"
+    rm -rf "$makepkg_gnupg"
+    mkdir -p "$makepkg_gnupg"
+    chmod 700 "$makepkg_gnupg"
+    gpg --batch --homedir "$makepkg_gnupg" --import /usr/share/pacman/keyrings/archlinux.gpg >/dev/null 2>&1 || true
+    if ! gpg --batch --homedir "$makepkg_gnupg" --list-keys 647F28654894E3BD457199BE38DBBDC86092693E >/dev/null 2>&1; then
+        gpg --batch --homedir "$makepkg_gnupg" --keyserver hkps://keyserver.ubuntu.com \
+            --recv-keys 647F28654894E3BD457199BE38DBBDC86092693E >/dev/null 2>&1 || true
+    fi
+    if gpg --batch --homedir "$makepkg_gnupg" --list-keys 647F28654894E3BD457199BE38DBBDC86092693E >/dev/null 2>&1; then
+        touch "$makepkg_gnupg/.x-kernel-ready"
+    else
+        warn "could not import the kernel.org signing key; source verification may fail"
+    fi
+    if [[ "$(id -u)" -eq 0 && -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]]; then
+        chown -R "$SUDO_UID:$SUDO_GID" "$makepkg_gnupg" 2>/dev/null || true
+    fi
+fi
+
 chroot_args=(-r "$CHROOT")
 (( clean )) && chroot_args+=(-c)
 chroot_args+=(-- --nocheck)
+
+: "${NPROC:=$(nproc)}"
+: "${MAKEFLAGS:=-j$NPROC}"
 
 (
     cd "$recipe"
@@ -126,6 +163,9 @@ chroot_args+=(-- --nocheck)
         PKGDEST="$outdir" \
         SRCDEST="$SRCDEST" \
         LOGDEST="$LOGDEST" \
+        GNUPGHOME="$makepkg_gnupg" \
+        NPROC="$NPROC" \
+        MAKEFLAGS="$MAKEFLAGS" \
         makechrootpkg "${chroot_args[@]}"
 )
 
