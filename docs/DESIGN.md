@@ -13,7 +13,7 @@
 
 The Arch PKGBUILD uses `${pkgbase#linux}` for
 `localversion.20-pkgname`, so `linux-x` produces a kernel release ending in
-`-x` (for example `7.2.15-arch1-1-x`). `stable` and `testing` share this
+`-x` (for example `7.3.4-arch1-1-x`). `stable` and `testing` share this
 package name and `[x-kernel]` repo; only stable is published.
 
 ### mainline (AUR linux-mainline)

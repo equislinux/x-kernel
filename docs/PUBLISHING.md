@@ -61,9 +61,10 @@ Server = https://downloads.sourceforge.net/project/equislinux/kernel-mainline/x8
 The SourceForge direct URL pattern was verified with the existing ISO files
 (302 to a mirror). A direct pacman sync currently fails because pacman appends
 `.sig` to the redirected URL query string (`GPGME error: No data` /
-`missing required signature`). The ISO installer bundles the signed packages
-and uses `pacman -U`; the online client stanzas above are the intended
-configuration once the small DB is mirrored on a non-redirecting host.
+`missing required signature`). The ISO installer bundles the signed packages; the xpm backend installs them
+with `xpm install <local-package>` and the pacman backend uses `pacman -U`.
+The online client stanzas above are the intended configuration once the small
+DB is mirrored on a non-redirecting host.
 
 Published on 2026-11-13:
 
