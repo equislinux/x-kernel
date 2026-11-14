@@ -41,7 +41,10 @@ next Arch stable bump. `testing` is a local preview (currently 7.3.4.arch1-2).
   100 MB/file limit. Stable and mainline have separate repos and directories.
 - CI is only a watcher (`.github/workflows/kernel-watch.yml`). **Builds and
   publication are manual.**
+- The 2026-11-14 X ISO ships the signed X kernels; full installs keep Arch
+  `linux` as the default entry and expose the X kernel as an additional entry.
 - Repo: <https://github.com/equislinux/x-kernel>.
+- Practical guide: [`docs/MANUAL.md`](docs/MANUAL.md).
 
 ## Layout
 
@@ -55,6 +58,7 @@ scripts/release.sh          check -> prepare -> build [-> publish]
 scripts/watch-upstream.sh   report all channels; never builds or publishes
 scripts/verify-package.sh   package content/signature checks
 .github/workflows/kernel-watch.yml  CI watcher (no build/publish)
+docs/MANUAL.md              practical install/build/test guide
 config.env.example          local paths and SourceForge settings
 ```
 
@@ -112,9 +116,10 @@ three upstream versions and writes a step summary.
 The SourceForge binary repos are published, but a direct `pacman -Sy` against
 `downloads.sourceforge.net` currently hits a SourceForge redirect bug: pacman
 builds the `.db.sig` URL by appending `.sig` to the redirected query string.
-The X ISO avoids this by bundling the signed kernel packages and installing
-them with `pacman -U`. The client stanzas below are the intended online
-configuration once the DB is mirrored on a non-redirecting host.
+The X ISO avoids this by bundling the signed kernel packages: the xpm backend
+installs them with `xpm install <local-package>`, and the pacman backend uses
+`pacman -U`. The client stanzas below are the intended online configuration
+once the DB is mirrored on a non-redirecting host.
 
 ## SourceForge setup (first time)
 
@@ -143,6 +148,9 @@ Install explicitly, keeping Arch's kernel as fallback:
 sudo xpm install --needed linux-x linux-x-headers
 sudo xpm install --needed linux-x-mainline linux-x-mainline-headers
 ```
+
+On a full X ISO install, Arch `linux` and the selected X kernel can coexist;
+the Arch entry remains the default. Select the X entry at boot to use it.
 
 ## Safety
 
