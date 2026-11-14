@@ -1,10 +1,42 @@
+# Local configuration and credentials
 config.env
+keys/
+.gnupg/
+.env
+.env.*
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+
+# Build products and caches
 work/
 out/
 repo/
+tmp/
+.cache/
+target/
 *.log
-*.pkg.tar.zst
-*.pkg.tar.zst.sig
+*.tmp
+*.pkg.tar.*
 *.tar.gz
+*.tar.xz
+*.tar.zst
+*.tar.sign
+*.patch
+*.patch.zst
+*.patch.zst.sig
+*.sig
+*.x-kernel-source.json
+*.x-kernel-delta.json
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
